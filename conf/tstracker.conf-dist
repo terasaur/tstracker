@@ -1,0 +1,35 @@
+# terasaur tracker config
+[main]
+
+#udp_workers = 4
+#bind_tcp_address = 0.0.0.0
+#bind_tcp_port = 6969
+#bind_udp_address = 0.0.0.0
+#bind_udp_port = 6969
+
+#access_stats = 127.0.0.1
+#stats_url_path = stats
+
+rootdir = /usr/local/tstracker
+user = apache
+#redirect_url = http://www.example.com/
+
+[mongodb]
+#db_host = localhost
+#db_port = 27017
+#db_user =
+#db_pass =
+#db_name = tstracker
+#torrent_collection_name = torrent
+#seedbank_collection_name = seedbank
+
+[message_queue]
+#host = localhost
+#port = 5672
+#user = terasaur
+#pass = terasaur
+#vhost = /terasaur
+#exchange = terasaur
+#control_queue = tstracker.control
+#terasaur_queue = terasaur.web
+

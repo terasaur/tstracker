@@ -1,0 +1,185 @@
+# This Jamfile requires boost-build v2 to build.
+# The version shipped with boost 1.34.0
+
+import modules ;
+import path ;
+import os ;
+import errors ;
+import feature : feature ;
+import package ;
+import virtual-target ;
+
+VERSION = 2.0.0 ;
+
+BOOST_ROOT = [ modules.peek : BOOST_ROOT ] ;
+CXXFLAGS = [ modules.peek : CXXFLAGS ] ;
+LDFLAGS = [ modules.peek : LDFLAGS ] ;
+BOOST_LIBRARY_PATH = [ modules.peek : BOOST_LIBRARY_PATH ] ;
+BOOST_INCLUDE_PATH = [ modules.peek : BOOST_INCLUDE_PATH ] ;
+
+ECHO "BOOST_ROOT =" $(BOOST_ROOT) ;
+ECHO "BOOST_LIBRARY_PATH =" $(BOOST_LIBRARY_PATH) ;
+ECHO "BOOST_INCLUDE_PATH =" $(BOOST_INCLUDE_PATH) ;
+ECHO "CXXFLAGS =" $(CXXFLAGS) ;
+ECHO "LDFLAGS =" $(LDFLAGS) ;
+ECHO "OS =" [ os.name ] ;
+
+lib gcc : : <name>gcc <link>static ;
+lib z : : <link>shared <name>z <search>/lib <search>/usr/lib ;
+lib owfat : : <link>static <name>owfat <search>/lib64 <search>/usr/lib64 ;
+lib mongoclient : : <name>mongoclient <link>shared ;
+lib boost_date_time : : <name>boost_date_time <include>$(BOOST_INCLUDE_PATH) <search>$(BOOST_LIBRARY_PATH) ;
+
+feature boost : system source : link-incompatible propagated ;
+feature boost-link : static shared : composite ;
+
+# rule for linking the correct libraries depending
+# on features and target-os
+rule linking ( properties * )
+{
+    local result ;
+    result += <library>z ;
+    result += <library>owfat ;
+    result += <library>mongoclient ;
+
+    if <boost>system in $(properties) && $(BOOST_INCLUDE_PATH)
+    {
+        result += <include>$(BOOST_INCLUDE_PATH) ;
+    }
+
+    # Some bug exists that causes boost date_time to not link properly when
+    # building with debug symbols.
+    if ( <variant>debug in $(properties) )
+    {
+        result += <library>boost_date_time/<link>shared ;
+    }
+
+    return $(result) ;
+}
+
+rule building ( properties * )
+{
+    local result ;
+
+    if ( <toolset>gcc in $(properties) ) {
+        result += <cflags>-Wall <cflags>-pipe <cflags>-Wextra <cflags>-pedantic ;
+    }
+
+    if ( <variant>debug in $(properties) )
+    {
+        result += <cflags>-D_DEBUG <cflags>-g <cflags>-ggdb <cflags>-pg <cflags>-ftest-coverage ;
+        result += <cflags>-D_DEBUG_HTTPERROR ;
+        # this causes gcov undefined ref errors
+        #result += <cflags>-fprofile-arcs  ;
+    } else {
+        result += <cflags>-O3 ;
+    }
+
+    # Force opentracker c files to compile as c++
+    #result += <cflags>"-x c++" ;
+
+    # opentracker compile options
+    #result += <cflags>-DWANT_ACCESSLIST_WHITE ;
+    result += <cflags>-DWANT_COMPRESSION_GZIP ;
+    result += <cflags>-DWANT_RESTRICT_STATS ;
+    #result += <cflags>-DWANT_V6 ;
+    #result += <cflags>-DWANT_FULLSCRAPE ;
+
+    # unused options
+    #WANT_V6
+    #WANT_ACCESSLIST_BLACK
+    #WANT_SYNC_LIVE
+    #WANT_IP_FROM_QUERY_STRING
+    #WANT_COMPRESSION_GZIP_ALWAYS
+    #WANT_LOG_NETWORKS
+    #WANT_IP_FROM_PROXY
+    #WANT_FULLLOG_NETWORKS
+    #WANT_LOG_NUMWANT
+    #WANT_MODEST_FULLSCRAPES
+    #WANT_SPOT_WOODPECKER
+    #WANT_SYSLOGS
+    #WANT_DEV_RANDOM
+    #WANT_FULLSCRAPE
+    #_DEBUG_HTTPERROR
+
+    return $(result) ;
+}
+
+OPENTRACKER_C_SOURCES =
+    opentracker
+    trackerlogic
+    scan_urlencoded_query
+    ot_mutex
+    ot_stats
+    ot_vector
+    ot_clean
+    ot_udp
+    ot_iovec
+    #ot_fullscrape
+    ot_accesslist
+    ot_http
+    #ot_livesync
+    ot_rijndael
+    ;
+
+OPENTRACKER_CPP_SOURCES =
+    ;
+
+#OPENTRACKER_SOURCES_PROXY
+#    proxy
+#    ot_vector
+#    ot_mutex
+#    ;
+
+LIBTORRENT_SOURCES =
+    escape_string
+    ;
+
+TSTRACKER_CPP_SOURCES =
+    config
+    converter
+    daemonize
+    log_util
+    date
+    #event_handler
+    torrent
+    torrentdb
+    torrent_acl
+    ts_export
+    tstracker
+    ;
+
+TSTRACKER_C_SOURCES =
+    peer_util
+    ;
+
+local usage-requirements =
+    <include>./include
+    <include>./include/opentracker
+    <include>/usr/include/libowfat
+    <include>/usr/include
+    <conditional>@linking
+    ;
+
+exe tstracker
+    : # sources
+    src/opentracker/$(OPENTRACKER_C_SOURCES).c
+    src/opentracker/$(OPENTRACKER_CPP_SOURCES).cpp
+    src/libtorrent/$(LIBTORRENT_SOURCES).cpp
+    src/terasaur/$(TSTRACKER_CPP_SOURCES).cpp
+    src/terasaur/$(TSTRACKER_C_SOURCES).c
+
+    : # requirements
+    <threading>multi
+    <conditional>@building
+    $(usage-requirements)
+
+    : # default build
+    <link>static
+    <threading>multi
+
+    : # usage requirements
+    $(usage-requirements)
+    ;
+
+install stage_module : tstracker : <location>. ;
